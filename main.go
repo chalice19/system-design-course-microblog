@@ -65,7 +65,7 @@ func (h *HTTPHandler) handlePostAPost(rw http.ResponseWriter, r *http.Request) {
 
 	loc, _ := time.LoadLocation("UTC")
 
-	time_now := time.Now().In(loc).Format("01-02-2006T15:04:05Z")
+	time_now := time.Now().In(loc).Format("2006-01-02T15:04:05Z")
 	rand.Seed(time.Now().UnixNano())
 	time_sec_string := strconv.Itoa(rand.Intn(100))
 	var id_text = time_now + user + time_sec_string
