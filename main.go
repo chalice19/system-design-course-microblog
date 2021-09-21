@@ -141,19 +141,6 @@ func (h *HTTPHandler) handleGetThePostLine(rw http.ResponseWriter, r *http.Reque
 	var answer PostLineAnswer
 	answer.Posts = make([]Post, 0)
 
-	h.storageMu.Lock()
-	num_of_posts = len(h.lines[user])
-	h.storageMu.Unlock()
-	if num_of_posts == 0 {
-		rawResponse, _ := json.Marshal(answer)
-		_, err = rw.Write(rawResponse)
-		if err != nil {
-			http.Error(rw, err.Error(), http.StatusBadRequest)
-			return
-		}
-		return
-	}
-
 	query_params := r.URL.Query()
 	size_query := query_params.Get("size")
 	var size int
@@ -174,6 +161,24 @@ func (h *HTTPHandler) handleGetThePostLine(rw http.ResponseWriter, r *http.Reque
 	match, _ := regexp.MatchString("^[A-Za-z0-9_\\-]*$", page_token)
 	if !match {
 		http.Error(rw, "Wrong PageToken format", 400)
+		return
+	}
+
+	h.storageMu.Lock()
+	num_of_posts = len(h.lines[user])
+	h.storageMu.Unlock()
+	if num_of_posts == 0 {
+		if page_token != "" {
+			http.Error(rw, "Bad PageToken", 400)
+			return
+		}
+
+		rawResponse, _ := json.Marshal(answer)
+		_, err = rw.Write(rawResponse)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
 		return
 	}
 
