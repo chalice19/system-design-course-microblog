@@ -83,12 +83,12 @@ func (s *storage_struct) GetPost(ctx context.Context, postId string) (storage.Po
 	return result, nil
 }
 
-func (s *storage_struct) GetPostLine(ctx context.Context, user string, post_token string, size int) (storage.PostLineAnswer, error) {
+func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_token string, size int) (storage.PostLineAnswer, error) {
 	var answer storage.PostLineAnswer
 	answer.Posts = make([]storage.Post, 0)
 	var post storage.Post
 
-	cursor, err := s.posts.Find(ctx, bson.M{"authorId": user, "_id": bson.M{"$gte": post_token}})
+	cursor, err := s.posts.Find(ctx, bson.M{"authorId": user, "_id": bson.M{"$gte": page_token}})
 	if err != nil {
 		panic(err)
 	}

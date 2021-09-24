@@ -14,12 +14,13 @@ type storage_struct struct {
 }
 
 func NewStorage() *storage_struct {
-	storage := storage_struct{
+	new_storage := storage_struct{
 		storage: make(map[string]storage.Post),
 		lines: make(map[string][]string),
 	}
 
-	return &storage
+	storage.IsReady = true
+	return &new_storage
 }
 
 

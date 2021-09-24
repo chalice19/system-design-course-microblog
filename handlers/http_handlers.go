@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/rand"
 	"microblog/storage"
-	"microblog/storage/mongostore"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -34,7 +33,7 @@ type PostRequestData struct {
 }
 
 func (h *HTTPHandler) PingHandler(rw http.ResponseWriter, r *http.Request) {
-	if mongostore.IsReady {
+	if storage.IsReady {
 		_, err := rw.Write([]byte("Ready!"))
 		if err != nil {
 			fmt.Println(err.Error())

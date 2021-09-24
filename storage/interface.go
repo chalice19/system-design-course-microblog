@@ -12,6 +12,8 @@ var (
 	ErrNotFound = fmt.Errorf("%w.not_found", ErrStorage)
 )
 
+var IsReady bool = false
+
 type Post struct {
 	Id        string `json:"id" bson:"_id"`
 	Text      string `json:"text" bson:"text"`
@@ -27,5 +29,5 @@ type PostLineAnswer struct {
 type Storage interface {
 	PostPost(ctx context.Context, post Post) error
 	GetPost(ctx context.Context, postId string) (Post, error)
-	GetPostLine(ctx context.Context, user string, post_token string, size int) (PostLineAnswer, error)
+	GetPostLine(ctx context.Context, user string, page_token string, size int) (PostLineAnswer, error)
 }
