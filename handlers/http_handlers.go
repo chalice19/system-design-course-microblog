@@ -132,7 +132,6 @@ func (h *HTTPHandler) HandleGetThePostLine(rw http.ResponseWriter, r *http.Reque
 	user := params["userId"]
 
 	var err error
-	// var num_of_posts int
 	var answer storage.PostLineAnswer
 	answer.Posts = make([]storage.Post, 0)
 

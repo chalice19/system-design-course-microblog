@@ -10,10 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"microblog/storage"
+	"os"
 	"time"
 )
 
-const dbName = "microblog"
 const collName = "Posts"
 var IsReady bool = false
 
@@ -28,7 +28,7 @@ func NewStorage(mongoURL string) *storage_struct {
 		panic(err)
 	}
 
-	collection := client.Database(dbName).Collection(collName)
+	collection := client.Database(os.Getenv("MONGO_DBNAME")).Collection(collName)
 	configureIndexes(ctx, collection)
 
 	IsReady = true

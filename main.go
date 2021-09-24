@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"microblog/handlers"
+	"microblog/storage"
+	"microblog/storage/localstorage"
 	"microblog/storage/mongostore"
 	"net/http"
 	"os"
@@ -11,14 +13,28 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const inmemory_mode = "inmemory"
+const db_mode = "mongo"
+
+func NewStorage() storage.Storage {
+	storage_mode := os.Getenv("STORAGE_MODE")
+	if storage_mode == inmemory_mode {
+		local_storage := localstorage.NewStorage()
+	 	return local_storage
+	} else if storage_mode == db_mode {
+		mongoUrl := os.Getenv("MONGO_URL")
+		mongostorage := mongostore.NewStorage(mongoUrl)
+		return mongostorage
+	}
+
+	return nil
+}
+
 func NewServer() *http.Server {
 	r := mux.NewRouter()
 
-	mongoUrl := os.Getenv("MONGO_URL")
-	mongoStorage := mongostore.NewStorage(mongoUrl)
-
 	handler := &handlers.HTTPHandler{
-		Storage: mongoStorage,
+		Storage: NewStorage(),
 	}
 
 	r.HandleFunc("/", handlers.HandleRoot)
