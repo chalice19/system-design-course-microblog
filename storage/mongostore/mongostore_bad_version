@@ -1,8 +1,8 @@
-package mongostore
-
 import (
+	"log"
+	"strconv"
+
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/bsonx"
@@ -16,7 +16,6 @@ import (
 )
 
 const collName = "Posts"
-var IsReady bool = false
 
 type storage_struct struct {
 	posts *mongo.Collection
@@ -32,7 +31,7 @@ func NewStorage(mongoURL string) *storage_struct {
 	collection := client.Database(os.Getenv("MONGO_DBNAME")).Collection(collName)
 	configureIndexes(ctx, collection)
 
-	IsReady = true
+	storage.IsReady = true
 
 	return &storage_struct{
 		posts: collection,
@@ -43,7 +42,8 @@ func configureIndexes(ctx context.Context, collection *mongo.Collection) {
 	indexModels := []mongo.IndexModel{
 		{
 			Keys: bsonx.Doc{{Key: "authorId", Value: bsonx.Int32(1)},
-							{Key: "_id", Value: bsonx.Int32(1)}},
+							// {Key: "offset", Value: bsonx.Int32(1)},
+						},
 		},
 	}
 	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
@@ -55,8 +55,15 @@ func configureIndexes(ctx context.Context, collection *mongo.Collection) {
 }
 
 func (s *storage_struct) PostPost(ctx context.Context, post storage.Post) error {
+	index, err := s.posts.CountDocuments(ctx, bson.M{"authorId": post.AuthorId})
+	if err != nil {
+		panic(err)
+	}
+
+	post.Index = index
+
 	for attempt := 0; attempt < 5; attempt++ {
-		_, err := s.posts.InsertOne(ctx, post)
+		_, err = s.posts.InsertOne(ctx, post)
 		if err != nil {
 			if mongo.IsDuplicateKeyError(err) {
 				continue
@@ -88,76 +95,66 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 	var answer storage.PostLineAnswer
 	answer.Posts = make([]storage.Post, 0)
 	var post storage.Post
-	var err error
-	var page_token_decoded primitive.ObjectID
 
-	// check if page_token is correct
+	var page_index int64
 	if page_token != "" {
-		count, err := s.posts.CountDocuments(ctx, bson.M{"authorId": user})
-		if err != nil {
-			panic(err)
+		page_index, err := strconv.ParseInt(page_token, 10, 64)
+		fmt.Println("page_index =", page_index)
+		if err != nil || page_index < 0 {
+			fmt.Println("but error is not nil", err)
+			return answer, err
 		}
-		if count == 0 {
-			return answer, storage.ErrNotFound
-		}
-
-		// make ObkectID from page_token
-		page_token_decoded, err = primitive.ObjectIDFromHex(page_token)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	// sort posts so that latest goes first
-	opts := options.Find()
-	opts.SetSort(bson.M{"_id": -1})
-
-	// find all posts of the user sorted beginning from page_token post
-	var cursor *mongo.Cursor
-	if page_token != "" {
-		cursor, err = s.posts.Find(ctx, bson.M{"authorId": user, "_id": bson.M{"$lte": page_token_decoded}}, opts)
 	} else {
-		cursor, err = s.posts.Find(ctx, bson.M{"authorId": user}, opts)
+		page_index, err := s.posts.CountDocuments(ctx, bson.M{"authorId": user})
+		fmt.Println("we counted page index, it is", page_index)
+		if err != nil {
+			panic(err)
+		}
+		page_index -= 1
 	}
+
+	opts := options.Find()
+	opts.SetSort(bson.M{"offset": -1})
+
+	// cursor, err := s.posts.Find(ctx, bson.M{"authorId": user, "offset": bson.M{"$lte": page_index}}, opts) //, "offset": bson.M{"$lte": page_index}})
+	// if err != nil {
+	// 	fmt.Println("has fallen here?")
+	// 	panic(err)
+	// }
+	// defer cursor.Close(ctx)
+
+	// i := 0
+	// cursor_ok := cursor.Next(ctx)
+	// if !cursor_ok && page_token != "" {
+	// 	fmt.Println("cursor is not ok")
+	// 	return answer, storage.ErrNotFound
+	// }
 	
+	// for cursor_ok && i < size {
+	// 	if err = cursor.Decode(&post); err != nil {
+	// 		panic(err)
+	// 	}
+	// 	answer.Posts = append(answer.Posts, post)
+	// 	fmt.Println("post index of", i, "th:", post.Index)
+	// 	i++
+	// 	cursor_ok = cursor.Next(ctx)
+	// }
+
+	// if cursor_ok && cursor.Decode(&post) == nil {
+	// 	answer.Token = strconv.FormatInt(post.Index, 10)
+	// }
+
+	err := s.posts.FindOne(ctx, bson.M{"authorId": user, "offset": page_index}).Decode(&post)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(post)
+
+	count, err := s.posts.CountDocuments(ctx, bson.M{"authorId": user})
 	if err != nil {
 		panic(err)
 	}
-	defer cursor.Close(ctx)
-
-	// read and safe no more than size posts
-	i := 0
-	cursor_ok := cursor.Next(ctx)
-	for cursor_ok && i < size {
-		if err = cursor.Decode(&post); err != nil {
-			panic(err)
-		}
-		answer.Posts = append(answer.Posts, post)
-
-
-		// decode, err := primitive.ObjectIDFromHex(post.MongoID.Hex())
-		// if err != nil {
-		// 	panic(err)
-		// }
-
-		// fmt.Println(post.Text, post.MongoID.Hex(), decode)
-
-
-
-		i++
-		cursor_ok = cursor.Next(ctx)
-	}
-
-	// safe the next page_token
-	if cursor_ok && cursor.Decode(&post) == nil {
-		answer.Token = post.MongoID.Hex()
-	}
-
-	// count, err := s.posts.CountDocuments(ctx, bson.D{})
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println("numm of docs:", count)
+	fmt.Println("numm of docs:", count)
 
 	return answer, nil
 }

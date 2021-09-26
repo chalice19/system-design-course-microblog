@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var (
@@ -15,10 +17,11 @@ var (
 var IsReady bool = false
 
 type Post struct {
-	Id        string `json:"id" bson:"_id"`
+	Id        string `json:"inmemory_id"`
 	Text      string `json:"text" bson:"text"`
 	AuthorId  string `json:"authorId" bson:"authorId"`
 	CreatedAt string `json:"createdAt" bson:"createdAt"`
+	MongoID	  primitive.ObjectID `json:"mongoId,omitempty" bson:"_id,omitempty"`
 }
 
 type PostLineAnswer struct {
