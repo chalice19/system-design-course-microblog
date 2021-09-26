@@ -17,7 +17,7 @@ var (
 var IsReady bool = false
 
 type Post struct {
-	Id        string `json:"inmemory_id"`
+	Id        string `json:"id" bson:"id"`
 	Text      string `json:"text" bson:"text"`
 	AuthorId  string `json:"authorId" bson:"authorId"`
 	CreatedAt string `json:"createdAt" bson:"createdAt"`

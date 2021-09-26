@@ -72,7 +72,7 @@ func (s *storage_struct) PostPost(ctx context.Context, post storage.Post) error 
 
 func (s *storage_struct) GetPost(ctx context.Context, postId string) (storage.Post, error) {
 	var result storage.Post
-	err := s.posts.FindOne(ctx, bson.M{"_id": postId}).Decode(&result)
+	err := s.posts.FindOne(ctx, bson.M{"id": postId}).Decode(&result)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return result, fmt.Errorf("no post with id %v - %w", postId, storage.ErrNotFound)
