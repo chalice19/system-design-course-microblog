@@ -54,44 +54,42 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 
 	s.storageMu.Lock()
 	num_of_posts := len(s.lines[user])
-	s.storageMu.Unlock()
 
 	if num_of_posts == 0 {
 		if page_token != "" {
+			s.storageMu.Unlock()
 			return answer, storage.ErrNotFound
 		}
-
+		
+		s.storageMu.Unlock()
 		return answer, nil
 	}
 
 	var i = num_of_posts - 1
 
 	if page_token != "" {
-		s.storageMu.Lock()
 		for i >= 0 && page_token != s.lines[user][i] {
 			i--
 		}
-		s.storageMu.Unlock()
 	}
 
 	if i == -1 {
+		s.storageMu.Unlock()
 		return answer, storage.ErrNotFound
 	}
 
-	var end = int(math.Max(-1, float64(i-size)))
+	var end = int(math.Max(-1, float64(i - size)))
 
 	for ; i >= 0 && i > end; i-- {
-		s.storageMu.Lock()
 		key := s.lines[user][i]
 		answer.Posts = append(answer.Posts, s.storage[key])
-		s.storageMu.Unlock()
 	}
 
 	if i > -1 {
-		s.storageMu.Lock()
 		answer.Token = s.lines[user][i]
-		s.storageMu.Unlock()
 	}
+
+	s.storageMu.Unlock()
 
 	return answer, nil
 }
