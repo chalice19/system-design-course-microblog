@@ -159,7 +159,7 @@ func (h *HTTPHandler) HandleGetThePostLine(rw http.ResponseWriter, r *http.Reque
 
 	answer, err = h.Storage.GetPostLine(r.Context(), user, page_token, size)
 	if err != nil {
-		http.Error(rw, "Something bad has hapened", 400)
+		http.Error(rw, "Something bad has hapened: " + err.Error(), 400)
 		return
 	}
 
