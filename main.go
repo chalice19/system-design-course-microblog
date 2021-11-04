@@ -14,14 +14,14 @@ import (
 )
 
 const inmemory_mode = "inmemory"
-const db_mode = "mongo"
+const mongo_db_mode = "mongo"
 
 func NewStorage() storage.Storage {
 	storage_mode := os.Getenv("STORAGE_MODE")
 	if storage_mode == inmemory_mode {
 		local_storage := localstorage.NewStorage()
 	 	return local_storage
-	} else if storage_mode == db_mode {
+	} else if storage_mode == mongo_db_mode {
 		mongoUrl := os.Getenv("MONGO_URL")
 		mongostorage := mongostore.NewStorage(mongoUrl)
 		return mongostorage

@@ -1,17 +1,16 @@
 package handlers
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"microblog/storage"
 	"net/http"
 	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -25,7 +24,7 @@ func HandleRoot(w http.ResponseWriter, _ *http.Request) {
 }
 
 type HTTPHandler struct {
-	Storage		storage.Storage
+	Storage storage.Storage
 }
 
 type PostRequestData struct {
@@ -68,18 +67,14 @@ func (h *HTTPHandler) HandlePostAPost(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	loc, _ := time.LoadLocation("UTC")
-
 	time_now := time.Now().In(loc).Format("2006-01-02T15:04:05Z")
-	rand.Seed(time.Now().UnixNano())
-	time_sec_string := strconv.Itoa(rand.Intn(100))
-	var id_text = time_now + user + time_sec_string
 
-	id := base64.RawStdEncoding.EncodeToString([]byte(id_text))
+	id := uuid.NewString()
 
 	var post = storage.Post{
-		Id: id,
-		Text: data.Text,
-		AuthorId: user,
+		Id:        id,
+		Text:      data.Text,
+		AuthorId:  user,
 		CreatedAt: time_now,
 	}
 
@@ -88,7 +83,7 @@ func (h *HTTPHandler) HandlePostAPost(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
- 
+
 	rawResponse, _ := json.Marshal(post)
 
 	rw.Header().Set("Content-Type", "application/json")
@@ -159,7 +154,7 @@ func (h *HTTPHandler) HandleGetThePostLine(rw http.ResponseWriter, r *http.Reque
 
 	answer, err = h.Storage.GetPostLine(r.Context(), user, page_token, size)
 	if err != nil {
-		http.Error(rw, "Something bad has hapened: " + err.Error(), 400)
+		http.Error(rw, "Something bad has hapened: "+err.Error(), 400)
 		return
 	}
 
