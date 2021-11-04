@@ -33,7 +33,7 @@ type PostRequestData struct {
 
 func (h *HTTPHandler) PingHandler(rw http.ResponseWriter, r *http.Request) {
 	if storage.IsReady {
-		_, err := rw.Write([]byte("Ready!"))
+		_, err := rw.Write([]byte("Ready!\n"))
 		if err != nil {
 			fmt.Println(err.Error())
 			return

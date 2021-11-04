@@ -16,7 +16,7 @@ import (
 )
 
 const collName = "Posts"
-var IsReady bool = false
+// var IsReady bool = false
 
 type storage_struct struct {
 	posts *mongo.Collection
@@ -32,7 +32,7 @@ func NewStorage(mongoURL string) *storage_struct {
 	collection := client.Database(os.Getenv("MONGO_DBNAME")).Collection(collName)
 	configureIndexes(ctx, collection)
 
-	IsReady = true
+	storage.IsReady = true
 
 	return &storage_struct{
 		posts: collection,
@@ -114,16 +114,17 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 
 	// find all posts of the user sorted beginning from page_token post
 	var cursor *mongo.Cursor
+
 	if page_token != "" {
 		cursor, err = s.posts.Find(ctx, bson.M{"authorId": user, "_id": bson.M{"$lte": page_token_decoded}}, opts)
 	} else {
 		cursor, err = s.posts.Find(ctx, bson.M{"authorId": user}, opts)
 	}
+	defer cursor.Close(ctx)
 	
 	if err != nil {
 		panic(err)
 	}
-	defer cursor.Close(ctx)
 
 	// read and safe no more than size posts
 	i := 0
@@ -134,7 +135,6 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 		}
 		answer.Posts = append(answer.Posts, post)
 
-
 		// decode, err := primitive.ObjectIDFromHex(post.MongoID.Hex())
 		// if err != nil {
 		// 	panic(err)
@@ -142,10 +142,12 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 
 		// fmt.Println(post.Text, post.MongoID.Hex(), decode)
 
-
-
 		i++
 		cursor_ok = cursor.Next(ctx)
+	}
+
+	if page_token != "" && len(answer.Posts) == 0 {
+		return answer, storage.ErrNotFound
 	}
 
 	// safe the next page_token
