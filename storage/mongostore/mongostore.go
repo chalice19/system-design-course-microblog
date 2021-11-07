@@ -42,7 +42,7 @@ func configureIndexes(ctx context.Context, collection *mongo.Collection) {
 	indexModels := []mongo.IndexModel{
 		{
 			Keys: bsonx.Doc{{Key: "authorId", Value: bsonx.Int32(1)},
-							{Key: "_id", Value: bsonx.Int32(1)}},
+				{Key: "_id", Value: bsonx.Int32(1)}},
 		},
 	}
 	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
@@ -121,7 +121,7 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 		cursor, err = s.posts.Find(ctx, bson.M{"authorId": user}, opts)
 	}
 	defer cursor.Close(ctx)
-	
+
 	if err != nil {
 		panic(err)
 	}
@@ -174,10 +174,13 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 		return post, storage.ErrUnauthorized
 	}
 
+	loc, _ := time.LoadLocation("UTC")
+	time_now := time.Now().In(loc).Format("2006-01-02T15:04:05Z")
+
 	_, err = s.posts.UpdateOne(
 		ctx,
-		bson.M{"id": postId, },
-		bson.M{"$set": bson.M{"text": new_text}},
+		bson.M{"id": postId},
+		bson.M{"$set": bson.M{"text": new_text, "createdAt": time_now}},
 	)
 
 	post.Text = new_text

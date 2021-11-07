@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type storage_struct struct {
@@ -156,7 +157,12 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 		return post, storage.ErrUnauthorized
 	}
 
+	loc, _ := time.LoadLocation("UTC")
+	time_now := time.Now().In(loc).Format("2006-01-02T15:04:05Z")
+
 	post.Text = new_text
+	post.CreatedAt = time_now
+
 	s.storage[postId] = post
 
 	return post, nil
