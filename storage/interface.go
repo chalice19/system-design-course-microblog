@@ -36,5 +36,5 @@ type Storage interface {
 	PostPost(ctx context.Context, post Post) error
 	GetPost(ctx context.Context, postId string) (Post, error)
 	GetPostLine(ctx context.Context, user string, page_token string, size int) (PostLineAnswer, error)
-	ChangePostText(ctx context.Context, postId string, user string, new_text string) (Post, error)
+	ChangePostText(ctx context.Context, postId string, user string, new_text string, new_time string) (Post, error)
 }

@@ -86,8 +86,8 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 	return answer, nil
 }
 
-func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user string, new_text string) (storage.Post, error) {
-	post, err := s.persistentStorage.ChangePostText(ctx, postId, user, new_text)
+func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user string, new_text string, new_time string) (storage.Post, error) {
+	post, err := s.persistentStorage.ChangePostText(ctx, postId, user, new_text, new_time)
 	if err != nil {
 		return post, err
 	}

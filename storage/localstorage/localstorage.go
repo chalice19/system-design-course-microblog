@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 type storage_struct struct {
@@ -49,49 +48,6 @@ func (s *storage_struct) GetPost(ctx context.Context, postId string) (storage.Po
 
 	return post, nil
 }
-
-// func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_token string, size int) (storage.PostLineAnswer, error) {
-// 	var answer storage.PostLineAnswer
-// 	answer.Posts = make([]storage.Post, 0)
-
-// 	s.storageMu.Lock()
-//	defer s.storageMu.Unlock()
-
-// 	num_of_posts := len(s.lines[user])
-
-// 	if num_of_posts == 0 {
-// 		if page_token != "" {
-// 			return answer, storage.ErrNotFound
-// 		}
-
-// 		return answer, nil
-// 	}
-
-// 	var i = num_of_posts - 1
-
-// 	if page_token != "" {
-// 		for i >= 0 && page_token != s.lines[user][i] {
-// 			i--
-// 		}
-// 	}
-
-// 	if i == -1 {
-// 		return answer, storage.ErrNotFound
-// 	}
-
-// 	var end = i - size
-
-// 	for ; i >= 0 && i > end; i-- {
-// 		key := s.lines[user][i]
-// 		answer.Posts = append(answer.Posts, s.storage[key])
-// 	}
-
-// 	if i > -1 {
-// 		answer.Token = s.lines[user][i]
-// 	}
-
-// 	return answer, nil
-// }
 
 func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_token string, size int) (storage.PostLineAnswer, error) {
 	var answer storage.PostLineAnswer
@@ -144,7 +100,7 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 	return answer, nil
 }
 
-func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user string, new_text string) (storage.Post, error) {
+func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user string, new_text string, new_time string) (storage.Post, error) {
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
 
@@ -157,11 +113,8 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 		return post, storage.ErrUnauthorized
 	}
 
-	loc, _ := time.LoadLocation("UTC")
-	time_now := time.Now().In(loc).Format("2006-01-02T15:04:05Z")
-
 	post.Text = new_text
-	post.CreatedAt = time_now
+	post.CreatedAt = new_time
 
 	s.storage[postId] = post
 

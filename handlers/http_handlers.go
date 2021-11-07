@@ -186,7 +186,10 @@ func (h *HTTPHandler) HandleChangeThePostText(rw http.ResponseWriter, r *http.Re
 		return
 	}
 
-	post, err := h.Storage.ChangePostText(r.Context(), post_id, user_slice[0], data.Text)
+	loc, _ := time.LoadLocation("UTC")
+	time_now := time.Now().In(loc).Format("2006-01-02T15:04:05Z")
+
+	post, err := h.Storage.ChangePostText(r.Context(), post_id, user_slice[0], data.Text, time_now)
 	if err != nil {
 		if errors.Is(err, storage.ErrUnauthorized) {
 			http.Error(rw, "Post with this postId created by other user", http.StatusForbidden)

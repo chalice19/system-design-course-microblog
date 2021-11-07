@@ -135,13 +135,6 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 		}
 		answer.Posts = append(answer.Posts, post)
 
-		// decode, err := primitive.ObjectIDFromHex(post.MongoID.Hex())
-		// if err != nil {
-		// 	panic(err)
-		// }
-
-		// fmt.Println(post.Text, post.MongoID.Hex(), decode)
-
 		i++
 		cursor_ok = cursor.Next(ctx)
 	}
@@ -155,16 +148,10 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 		answer.Token = post.MongoID.Hex()
 	}
 
-	// count, err := s.posts.CountDocuments(ctx, bson.D{})
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println("numm of docs:", count)
-
 	return answer, nil
 }
 
-func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user string, new_text string) (storage.Post, error) {
+func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user string, new_text string, new_time string) (storage.Post, error) {
 	post, err := s.GetPost(ctx, postId)
 	if err != nil {
 		return post, err
@@ -174,13 +161,10 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 		return post, storage.ErrUnauthorized
 	}
 
-	loc, _ := time.LoadLocation("UTC")
-	time_now := time.Now().In(loc).Format("2006-01-02T15:04:05Z")
-
 	_, err = s.posts.UpdateOne(
 		ctx,
 		bson.M{"id": postId},
-		bson.M{"$set": bson.M{"text": new_text, "createdAt": time_now}},
+		bson.M{"$set": bson.M{"text": new_text, "createdAt": new_time}},
 	)
 
 	post.Text = new_text
