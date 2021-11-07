@@ -114,7 +114,7 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 	}
 
 	post.Text = new_text
-	post.CreatedAt = new_time
+	post.LastModifiedAt = new_time
 
 	s.storage[postId] = post
 

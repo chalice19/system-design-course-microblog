@@ -9,22 +9,23 @@ import (
 )
 
 var (
-	ErrStorage = errors.New("storage")
-	ErrCollision = fmt.Errorf("%w: collision", ErrStorage)
-	ErrNotFound = fmt.Errorf("%w: not found", ErrStorage)
+	ErrStorage      = errors.New("storage")
+	ErrCollision    = fmt.Errorf("%w: collision", ErrStorage)
+	ErrNotFound     = fmt.Errorf("%w: not found", ErrStorage)
 	ErrUnauthorized = fmt.Errorf("%w: unauthorized action", ErrStorage)
 )
 
 var IsReady bool = false
 
 type Post struct {
-	Id        string `json:"id" bson:"id"`
-	Text      string `json:"text" bson:"text"`
-	AuthorId  string `json:"authorId" bson:"authorId"`
-	CreatedAt string `json:"createdAt" bson:"createdAt"`
+	Id             string `json:"id" bson:"id"`
+	Text           string `json:"text" bson:"text"`
+	AuthorId       string `json:"authorId" bson:"authorId"`
+	CreatedAt      string `json:"createdAt" bson:"createdAt"`
+	LastModifiedAt string `json:"lastModifiedAt" bson:"lastModifiedAt"`
 
 	// mongo id to read docs in the right order
-	MongoID	  primitive.ObjectID `json:"mongoId,omitempty" bson:"_id,omitempty"`
+	MongoID primitive.ObjectID `json:"mongoId,omitempty" bson:"_id,omitempty"`
 }
 
 type PostLineAnswer struct {

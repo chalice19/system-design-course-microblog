@@ -72,10 +72,11 @@ func (h *HTTPHandler) HandlePostAPost(rw http.ResponseWriter, r *http.Request) {
 	id := uuid.NewString()
 
 	var post = storage.Post{
-		Id:        id,
-		Text:      data.Text,
-		AuthorId:  user,
-		CreatedAt: time_now,
+		Id:             id,
+		Text:           data.Text,
+		AuthorId:       user,
+		CreatedAt:      time_now,
+		LastModifiedAt: time_now,
 	}
 
 	err = h.Storage.PostPost(r.Context(), post)
@@ -177,7 +178,7 @@ func (h *HTTPHandler) HandleChangeThePostText(rw http.ResponseWriter, r *http.Re
 		http.Error(rw, "No user specified", http.StatusUnauthorized)
 		return
 	}
-	
+
 	// read new text
 	var data PostRequestData
 	err := json.NewDecoder(r.Body).Decode(&data)

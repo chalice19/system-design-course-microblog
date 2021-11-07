@@ -164,7 +164,7 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 	_, err = s.posts.UpdateOne(
 		ctx,
 		bson.M{"id": postId},
-		bson.M{"$set": bson.M{"text": new_text, "createdAt": new_time}},
+		bson.M{"$set": bson.M{"text": new_text, "lastModifiedAt": new_time}},
 	)
 
 	post.Text = new_text
