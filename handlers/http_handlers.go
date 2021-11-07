@@ -55,7 +55,7 @@ func (h *HTTPHandler) HandlePostAPost(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	user_slice, ok := r.Header["System-Design-User-Id"]
-	if !ok {
+	if !ok || len(user_slice) != 1 {
 		http.Error(rw, "No user specified", http.StatusUnauthorized)
 		return
 	}
@@ -160,6 +160,49 @@ func (h *HTTPHandler) HandleGetThePostLine(rw http.ResponseWriter, r *http.Reque
 
 	rawResponse, _ := json.Marshal(answer)
 
+	_, err = rw.Write(rawResponse)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func (h *HTTPHandler) HandleChangeThePostText(rw http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	post_id := params["postId"]
+
+	// check if user specified
+	user_slice, ok := r.Header["System-Design-User-Id"]
+	if !ok || len(user_slice) != 1 {
+		http.Error(rw, "No user specified", http.StatusUnauthorized)
+		return
+	}
+	
+	// read new text
+	var data PostRequestData
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	post, err := h.Storage.ChangePostText(r.Context(), post_id, user_slice[0], data.Text)
+	if err != nil {
+		if errors.Is(err, storage.ErrUnauthorized) {
+			http.Error(rw, "Post with this postId created by other user", http.StatusForbidden)
+			return
+		} else if errors.Is(err, storage.ErrNotFound) {
+			http.Error(rw, "Post with this postId does not exist", 404)
+			return
+		} else {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	rawResponse, _ := json.Marshal(post)
+
+	rw.Header().Set("Content-Type", "application/json")
 	_, err = rw.Write(rawResponse)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)

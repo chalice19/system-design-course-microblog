@@ -142,3 +142,22 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 
 	return answer, nil
 }
+
+func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user string, new_text string) (storage.Post, error) {
+	s.storageMu.Lock()
+	defer s.storageMu.Unlock()
+
+	post, ok := s.storage[postId]
+
+	if !ok {
+		return post, storage.ErrNotFound
+	}
+	if post.AuthorId != user {
+		return post, storage.ErrUnauthorized
+	}
+
+	post.Text = new_text
+	s.storage[postId] = post
+
+	return post, nil
+}

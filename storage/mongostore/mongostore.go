@@ -15,8 +15,7 @@ import (
 	"time"
 )
 
-const collName = "Posts"
-// var IsReady bool = false
+const collectionName = "Posts"
 
 type storage_struct struct {
 	posts *mongo.Collection
@@ -29,7 +28,7 @@ func NewStorage(mongoURL string) *storage_struct {
 		panic(err)
 	}
 
-	collection := client.Database(os.Getenv("MONGO_DBNAME")).Collection(collName)
+	collection := client.Database(os.Getenv("MONGO_DBNAME")).Collection(collectionName)
 	configureIndexes(ctx, collection)
 
 	storage.IsReady = true
@@ -72,6 +71,7 @@ func (s *storage_struct) PostPost(ctx context.Context, post storage.Post) error 
 
 func (s *storage_struct) GetPost(ctx context.Context, postId string) (storage.Post, error) {
 	var result storage.Post
+
 	err := s.posts.FindOne(ctx, bson.M{"id": postId}).Decode(&result)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
@@ -162,4 +162,25 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 	// fmt.Println("numm of docs:", count)
 
 	return answer, nil
+}
+
+func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user string, new_text string) (storage.Post, error) {
+	post, err := s.GetPost(ctx, postId)
+	if err != nil {
+		return post, err
+	}
+
+	if post.AuthorId != user {
+		return post, storage.ErrUnauthorized
+	}
+
+	_, err = s.posts.UpdateOne(
+		ctx,
+		bson.M{"id": postId, },
+		bson.M{"$set": bson.M{"text": new_text}},
+	)
+
+	post.Text = new_text
+
+	return post, err
 }
