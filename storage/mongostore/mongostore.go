@@ -135,6 +135,13 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 		}
 		answer.Posts = append(answer.Posts, post)
 
+		// decode, err := primitive.ObjectIDFromHex(post.MongoID.Hex())
+		// if err != nil {
+		// 	panic(err)
+		// }
+
+		// fmt.Println(post.Text, post.MongoID.Hex(), decode)
+
 		i++
 		cursor_ok = cursor.Next(ctx)
 	}
@@ -147,6 +154,12 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 	if cursor_ok && cursor.Decode(&post) == nil {
 		answer.Token = post.MongoID.Hex()
 	}
+
+	// count, err := s.posts.CountDocuments(ctx, bson.D{})
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println("numm of docs:", count)
 
 	return answer, nil
 }
@@ -168,6 +181,7 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 	)
 
 	post.Text = new_text
+	post.LastModifiedAt = new_time
 
 	return post, err
 }
