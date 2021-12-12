@@ -33,9 +33,27 @@ type PostLineAnswer struct {
 	Token string `json:"nextPage,omitempty"`
 }
 
+type Subscription struct {
+	User string `bson:"user"`
+	ToUser string `bson:"toUser"`
+}
+
+type Subscriptions struct {
+	Users []string `json:"users"`
+}
+
+type Subscribers struct {
+	Users []string `json:"users"`
+}
+
 type Storage interface {
 	PostPost(ctx context.Context, post Post) error
 	GetPost(ctx context.Context, postId string) (Post, error)
 	GetPostLine(ctx context.Context, user string, page_token string, size int) (PostLineAnswer, error)
 	ChangePostText(ctx context.Context, postId string, user string, new_text string, new_time string) (Post, error)
+
+	Subscribe(ctx context.Context, user string, to_user string) error
+	GetSubscriptions(ctx context.Context, user string) (Subscriptions, error)
+	GetSubscribers(ctx context.Context, user string) (Subscribers, error)
+	GetFeed(ctx context.Context, user string, page_token string, size int) (PostLineAnswer, error)
 }

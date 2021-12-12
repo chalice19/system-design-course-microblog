@@ -6,8 +6,6 @@ services:
     ports:
       - 8080:8080
     environment:
-      STORAGE_MODE: 'cached'
-
       MONGO_URL: 'mongodb://database:27017'
       MONGO_DBNAME: 'microblog'
 
@@ -17,8 +15,3 @@ services:
     image: mongo:4.4
     ports:
       - 27017:27017
-
-  cache:
-    image: redis:6.2.6
-    ports:
-      - 6379:6379

@@ -33,7 +33,7 @@ type PostRequestData struct {
 
 func (h *HTTPHandler) PingHandler(rw http.ResponseWriter, r *http.Request) {
 	if storage.IsReady {
-		_, err := rw.Write([]byte("Ready!\n"))
+		_, err := rw.Write([]byte("Ready to work!\n"))
 		if err != nil {
 			fmt.Println(err.Error())
 			return
@@ -213,3 +213,86 @@ func (h *HTTPHandler) HandleChangeThePostText(rw http.ResponseWriter, r *http.Re
 		return
 	}
 }
+
+func (h *HTTPHandler) HandleSubscribe(rw http.ResponseWriter, r *http.Request) {
+	user_slice, ok := r.Header["System-Design-User-Id"]
+	if !ok || len(user_slice) != 1 {
+		http.Error(rw, "No user specified", http.StatusUnauthorized)
+		return
+	}
+	user := user_slice[0]
+
+	params := mux.Vars(r)
+	to_user := params["userId"]
+
+	// TODO Subscribe in storage
+	err := h.Storage.Subscribe(r.Context(), user, to_user)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	rw.WriteHeader(200)
+
+	// TODO: ничего не отвечаем?
+	// rawResponse, _ := json.Marshal(post)
+
+	// rw.Header().Set("Content-Type", "application/json")
+	// _, err = rw.Write(rawResponse)
+	// if err != nil {
+	// 	http.Error(rw, err.Error(), http.StatusBadRequest)
+	// 	return
+	// }
+}
+
+func (h *HTTPHandler) HandleGetSubscriptions(rw http.ResponseWriter, r *http.Request) {
+	user_slice, ok := r.Header["System-Design-User-Id"]
+	if !ok || len(user_slice) != 1 {
+		// http.Error(rw, "No user specified", http.StatusUnauthorized)
+		http.Error(rw, "No user specified", http.StatusBadRequest)
+		return
+	}
+	user := user_slice[0]
+
+	users, err := h.Storage.GetSubscriptions(r.Context(), user)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	rawResponse, _ := json.Marshal(users)
+
+	rw.Header().Set("Content-Type", "application/json")
+	_, err = rw.Write(rawResponse)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func (h *HTTPHandler) HandleGetSubscribers(rw http.ResponseWriter, r *http.Request) {
+	user_slice, ok := r.Header["System-Design-User-Id"]
+	if !ok || len(user_slice) != 1 {
+		// http.Error(rw, "No user specified", http.StatusUnauthorized)
+		http.Error(rw, "No user specified", http.StatusBadRequest)
+		return
+	}
+	user := user_slice[0]
+
+	users, err := h.Storage.GetSubscribers(r.Context(), user)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	rawResponse, _ := json.Marshal(users)
+
+	rw.Header().Set("Content-Type", "application/json")
+	_, err = rw.Write(rawResponse)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func (h *HTTPHandler) GetFeed(rw http.ResponseWriter, r *http.Request) {}

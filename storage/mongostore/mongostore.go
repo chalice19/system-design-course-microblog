@@ -10,15 +10,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"microblog/storage"
 	"os"
 	"time"
 )
 
-const collectionName = "Posts"
-
 type storage_struct struct {
 	posts *mongo.Collection
+	subscriptions *mongo.Collection
+	feeds *mongo.Collection
 }
 
 func NewStorage(mongoURL string) *storage_struct {
@@ -28,17 +29,56 @@ func NewStorage(mongoURL string) *storage_struct {
 		panic(err)
 	}
 
-	collection := client.Database(os.Getenv("MONGO_DBNAME")).Collection(collectionName)
-	configureIndexes(ctx, collection)
+	posts := client.Database(os.Getenv("MONGO_DBNAME")).Collection("Posts")
+	configurePostsIndexes(ctx, posts)
+
+	subscriptions := client.Database(os.Getenv("MONGO_DBNAME")).Collection("Subscribes")
+	configureSubscribesIndexes(ctx, subscriptions)
+
+	feeds := client.Database(os.Getenv("MONGO_DBNAME")).Collection("Feeds")
+	configureFeedsIndexes(ctx, feeds)
 
 	storage.IsReady = true
 
 	return &storage_struct{
-		posts: collection,
+		posts: posts,
+		subscriptions: subscriptions,
+		feeds: feeds,
 	}
 }
 
-func configureIndexes(ctx context.Context, collection *mongo.Collection) {
+func configurePostsIndexes(ctx context.Context, collection *mongo.Collection) {
+	indexModels := []mongo.IndexModel{
+		{
+			Keys: bsonx.Doc{{Key: "authorId", Value: bsonx.String("text")},
+				{Key: "_id", Value: bsonx.Int32(1)}},
+		},
+	}
+	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
+
+	_, err := collection.Indexes().CreateMany(ctx, indexModels, opts)
+	if err != nil {
+		panic(fmt.Errorf("failed to ensure indexes %w", err))
+	}
+}
+
+func configureSubscribesIndexes(ctx context.Context, collection *mongo.Collection) {
+	indexModels := []mongo.IndexModel{
+		{
+			Keys: bsonx.Doc{{Key: "user", Value: bsonx.String("text")},
+			{Key: "toUser", Value: bsonx.String("text")}},
+		},
+	}
+	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
+
+	_, err := collection.Indexes().CreateMany(ctx, indexModels, opts)
+	if err != nil {
+		panic(fmt.Errorf("failed to ensure indexes %w", err))
+	}
+}
+
+func configureFeedsIndexes(ctx context.Context, collection *mongo.Collection) {
+	// TODO
 	indexModels := []mongo.IndexModel{
 		{
 			Keys: bsonx.Doc{{Key: "authorId", Value: bsonx.Int32(1)},
@@ -101,7 +141,7 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 			return answer, storage.ErrNotFound
 		}
 
-		// make ObkectID from page_token
+		// make ObjectID from page_token
 		page_token_decoded, err = primitive.ObjectIDFromHex(page_token)
 		if err != nil {
 			panic(err)
@@ -120,13 +160,13 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 	} else {
 		cursor, err = s.posts.Find(ctx, bson.M{"authorId": user}, opts)
 	}
-	defer cursor.Close(ctx)
 
 	if err != nil {
 		panic(err)
 	}
+	defer cursor.Close(ctx)
 
-	// read and safe no more than size posts
+	// read and save no more than size posts
 	i := 0
 	cursor_ok := cursor.Next(ctx)
 	for cursor_ok && i < size {
@@ -150,7 +190,7 @@ func (s *storage_struct) GetPostLine(ctx context.Context, user string, page_toke
 		return answer, storage.ErrNotFound
 	}
 
-	// safe the next page_token
+	// save the next page_token
 	if cursor_ok && cursor.Decode(&post) == nil {
 		answer.Token = post.MongoID.Hex()
 	}
@@ -184,4 +224,93 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 	post.LastModifiedAt = new_time
 
 	return post, err
+}
+
+func (s *storage_struct) Subscribe(ctx context.Context, user string, to_user string) error {
+	log.Printf("Called Subscribe user %s to %s\n", user, to_user)
+
+	for attempt := 0; attempt < 5; attempt++ {
+		// Вставить без дупликатов
+		opts := options.Update().SetUpsert(true)
+		_, err := s.subscriptions.UpdateOne(
+			ctx, 
+			bson.M{"user": user, "toUser": to_user},
+			bson.M{"$set": bson.M{"user": user, "toUser": to_user}},
+			opts,
+		)
+
+		if err != nil {
+			if mongo.IsDuplicateKeyError(err) {
+				continue
+			}
+			log.Fatalln("error: ", err.Error())
+			return fmt.Errorf("something went wrong - %w", storage.ErrStorage)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("too much attempts during inserting - %w", storage.ErrCollision)
+}
+
+func (s *storage_struct) GetSubscriptions(ctx context.Context, user string) (storage.Subscriptions, error) {
+	log.Printf("Called Subscriptions of user %s\n", user)
+
+	var answer storage.Subscriptions
+	var subscription storage.Subscription
+
+	// find all subscriptions of the user
+	cursor, err := s.subscriptions.Find(ctx, bson.M{"user": user})
+	if err != nil {
+		return answer, err
+	}
+	defer cursor.Close(ctx)
+
+	// read and save
+	cursor_ok := cursor.Next(ctx)
+	for cursor_ok{
+		if err = cursor.Decode(&subscription); err != nil {
+			return answer, err
+		}
+		answer.Users = append(answer.Users, subscription.ToUser)
+
+		log.Println("subscribed to subscription")
+
+		cursor_ok = cursor.Next(ctx)
+	}
+
+	return answer, nil
+}
+
+func (s *storage_struct) GetSubscribers(ctx context.Context, user string) (storage.Subscribers, error) {
+	log.Printf("Called Subscribers of user %s\n", user)
+
+	var answer storage.Subscribers
+	var subscription storage.Subscription
+	
+	// find all subscriptions of the user
+	cursor, err := s.subscriptions.Find(ctx, bson.M{"toUser": user})
+	if err != nil {
+		return answer, err
+	}
+	defer cursor.Close(ctx)
+
+	// read and save
+	cursor_ok := cursor.Next(ctx)
+	for cursor_ok{
+		if err = cursor.Decode(&subscription); err != nil {
+			return answer, err
+		}
+		answer.Users = append(answer.Users, subscription.User)
+
+		cursor_ok = cursor.Next(ctx)
+	}
+
+	return answer, nil
+}
+
+func (s *storage_struct) GetFeed(ctx context.Context, user string, page_token string, size int) (storage.PostLineAnswer, error) {
+	log.Println("You send GetFeed requset, we're working on it")
+	var answer storage.PostLineAnswer
+	return answer, nil 
 }
