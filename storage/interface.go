@@ -23,9 +23,18 @@ type Post struct {
 	AuthorId       string `json:"authorId" bson:"authorId"`
 	CreatedAt      string `json:"createdAt" bson:"createdAt"`
 	LastModifiedAt string `json:"lastModifiedAt" bson:"lastModifiedAt"`
+	Timestamp      int64  `bson:"time"`
 
 	// mongo id to read docs in the right order
 	MongoID primitive.ObjectID `json:"mongoId,omitempty" bson:"_id,omitempty"`
+}
+
+type FeedPost struct {
+	User 		string `bson:"user"`
+	// ToUser		string
+	Timestamp 	int64 `bson:"time"`
+	PostId		primitive.ObjectID `bson:"postId"`
+	Post		Post `bson:"post"`
 }
 
 type PostLineAnswer struct {

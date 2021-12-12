@@ -50,7 +50,7 @@ func NewStorage(mongoURL string) *storage_struct {
 func configurePostsIndexes(ctx context.Context, collection *mongo.Collection) {
 	indexModels := []mongo.IndexModel{
 		{
-			Keys: bsonx.Doc{{Key: "authorId", Value: bsonx.String("text")},
+			Keys: bsonx.Doc{{Key: "authorId", Value: bsonx.Int32(1)},
 				{Key: "_id", Value: bsonx.Int32(1)}},
 		},
 	}
@@ -65,8 +65,8 @@ func configurePostsIndexes(ctx context.Context, collection *mongo.Collection) {
 func configureSubscribesIndexes(ctx context.Context, collection *mongo.Collection) {
 	indexModels := []mongo.IndexModel{
 		{
-			Keys: bsonx.Doc{{Key: "user", Value: bsonx.String("text")},
-			{Key: "toUser", Value: bsonx.String("text")}},
+			Keys: bsonx.Doc{{Key: "user", Value: bsonx.Int32(1)},
+			{Key: "toUser", Value: bsonx.Int32(1)}},
 		},
 	}
 	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
@@ -78,11 +78,15 @@ func configureSubscribesIndexes(ctx context.Context, collection *mongo.Collectio
 }
 
 func configureFeedsIndexes(ctx context.Context, collection *mongo.Collection) {
-	// TODO
 	indexModels := []mongo.IndexModel{
 		{
-			Keys: bsonx.Doc{{Key: "authorId", Value: bsonx.Int32(1)},
-				{Key: "_id", Value: bsonx.Int32(1)}},
+			Keys: bsonx.Doc{{Key: "user", Value: bsonx.Int32(1)},
+				{Key: "postId", Value: bsonx.Int32(-1)},
+				{Key: "time", Value: bsonx.Int32(-1)}},
+		},
+		{
+			Keys: bsonx.Doc{{Key: "user", Value: bsonx.Int32(1)},
+			{Key: "time", Value: bsonx.Int32(-1)}},
 		},
 	}
 	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
@@ -94,6 +98,8 @@ func configureFeedsIndexes(ctx context.Context, collection *mongo.Collection) {
 }
 
 func (s *storage_struct) PostPost(ctx context.Context, post storage.Post) error {
+	log.Println("User", post.AuthorId, "created post", post)
+
 	for attempt := 0; attempt < 5; attempt++ {
 		_, err := s.posts.InsertOne(ctx, post)
 		if err != nil {
@@ -101,6 +107,37 @@ func (s *storage_struct) PostPost(ctx context.Context, post storage.Post) error 
 				continue
 			}
 			return fmt.Errorf("something went wrong - %w", storage.ErrStorage)
+		}
+
+		// добавить также в feed всем, кто подписан на post.authorId
+		var subscription storage.Subscription
+		user := post.AuthorId
+
+		// find all subscribers of the user
+		cursor, err := s.subscriptions.Find(ctx, bson.M{"toUser": user})
+		if err != nil {
+			return err
+		}
+		defer cursor.Close(ctx)
+
+		cursor_ok := cursor.Next(ctx)
+		for cursor_ok{
+			if err = cursor.Decode(&subscription); err != nil {
+				return err
+			}
+			
+			feedpost := storage.FeedPost {
+				User: subscription.User,
+				PostId: post.MongoID,
+				Timestamp: post.Timestamp,
+				Post: post,
+			}
+			err = s.addFeedPost(ctx, feedpost)
+			if err != nil {
+				return err
+			}
+
+			cursor_ok = cursor.Next(ctx)
 		}
 
 		return nil
@@ -220,8 +257,24 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 		bson.M{"$set": bson.M{"text": new_text, "lastModifiedAt": new_time}},
 	)
 
+	if err != nil {
+		return post, nil
+	}
+
 	post.Text = new_text
 	post.LastModifiedAt = new_time
+	
+	// а еще изменить во всех копиях в feed
+
+	_, err = s.feeds.UpdateMany(
+		ctx,
+		bson.M{"postId": post.MongoID},
+		bson.M{"$set": bson.M{"post": post}},
+	)
+
+	if err != nil {
+		return post, nil
+	}
 
 	return post, err
 }
@@ -229,25 +282,41 @@ func (s *storage_struct) ChangePostText(ctx context.Context, postId string, user
 func (s *storage_struct) Subscribe(ctx context.Context, user string, to_user string) error {
 	log.Printf("Called Subscribe user %s to %s\n", user, to_user)
 
-	for attempt := 0; attempt < 5; attempt++ {
-		// Вставить без дупликатов
-		opts := options.Update().SetUpsert(true)
-		_, err := s.subscriptions.UpdateOne(
-			ctx, 
-			bson.M{"user": user, "toUser": to_user},
-			bson.M{"$set": bson.M{"user": user, "toUser": to_user}},
-			opts,
-		)
+	count, err := s.subscriptions.CountDocuments(ctx, bson.M{"user": user, "toUser": to_user})
+	if err != nil {
+		panic(err)
+	}
+	already_subed := count != 0
 
-		if err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				continue
+	if (!already_subed) {
+
+		for attempt := 0; attempt < 5; attempt++ {
+			// Вставить без дупликатов
+			opts := options.Update().SetUpsert(true)
+			_, err = s.subscriptions.UpdateOne(
+				ctx, 
+				bson.M{"user": user, "toUser": to_user},
+				bson.M{"$set": bson.M{"user": user, "toUser": to_user}},
+				opts,
+			)
+
+			if err != nil {
+				if mongo.IsDuplicateKeyError(err) {
+					continue
+				}
+				log.Fatalln("error: ", err.Error())
+				return fmt.Errorf("something went wrong - %w", storage.ErrStorage)
 			}
-			log.Fatalln("error: ", err.Error())
-			return fmt.Errorf("something went wrong - %w", storage.ErrStorage)
+
+			err = s.copyPostsToSubscriber(ctx, user, to_user)
+			if err != nil {
+				log.Fatalln("error: ", err.Error())
+				return fmt.Errorf("something went wrong - %w", storage.ErrStorage)
+			}
+
+			return nil
 		}
 
-		return nil
 	}
 
 	return fmt.Errorf("too much attempts during inserting - %w", storage.ErrCollision)
@@ -310,7 +379,126 @@ func (s *storage_struct) GetSubscribers(ctx context.Context, user string) (stora
 }
 
 func (s *storage_struct) GetFeed(ctx context.Context, user string, page_token string, size int) (storage.PostLineAnswer, error) {
-	log.Println("You send GetFeed requset, we're working on it")
+	log.Println("You send GetFeed requset for", size, "posts, we're working on it")
 	var answer storage.PostLineAnswer
-	return answer, nil 
+	answer.Posts = make([]storage.Post, 0)
+	var err error
+
+	var page_token_decoded primitive.ObjectID
+
+	// check if page_token is correct
+	if page_token != "" {
+		count, err := s.posts.CountDocuments(ctx, bson.M{"user": user})
+		if err != nil {
+			panic(err)
+		}
+		if count == 0 {
+			return answer, storage.ErrNotFound
+		}
+
+		// make ObjectID from page_token
+		page_token_decoded, err = primitive.ObjectIDFromHex(page_token)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	opts := options.Find()
+	opts.SetSort(bson.M{"time": -1})
+
+	// find all posts of the user sorted by time beginning from page_token post
+	var cursor *mongo.Cursor
+
+	if page_token != "" {
+		cursor, err = s.feeds.Find(ctx, bson.M{"user": user, "postId": bson.M{"$lte": page_token_decoded}}, opts)
+	} else {
+		cursor, err = s.feeds.Find(ctx, bson.M{"user": user}, opts)
+	}
+
+	if err != nil {
+		return answer, err
+	}
+	defer cursor.Close(ctx)
+
+	// count how many for this user
+	count, err := s.feeds.CountDocuments(ctx, bson.M{"user": user})
+	if err != nil {
+		panic(err)
+	}
+	log.Println("num of posts for user to see:", count)
+
+	var feedpost storage.FeedPost
+	i := 0
+	cursor_ok := cursor.Next(ctx)
+	for cursor_ok && i < size {
+		if err = cursor.Decode(&feedpost); err != nil {
+			return answer, err
+		}
+
+		answer.Posts = append(answer.Posts, feedpost.Post)
+
+		i++
+		cursor_ok = cursor.Next(ctx)
+	}
+
+	if page_token != "" && len(answer.Posts) == 0 {
+		return answer, storage.ErrNotFound
+	}
+
+	// save the next page_token
+	if cursor_ok && cursor.Decode(&feedpost) == nil {
+		answer.Token = feedpost.PostId.Hex()
+	}
+
+	return answer, nil
+}
+
+func (s *storage_struct) copyPostsToSubscriber(ctx context.Context, user string, to_user string) error {
+	cursor, err := s.posts.Find(ctx, bson.M{"authorId": to_user})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+
+	var post storage.Post
+
+	cursor_ok := cursor.Next(ctx)
+	for cursor_ok{
+		if err = cursor.Decode(&post); err != nil {
+			return err
+		}
+
+		feedpost := storage.FeedPost{
+			User: user,
+			Timestamp: post.Timestamp,
+			PostId: post.MongoID,
+			Post: post,
+		}
+		err = s.addFeedPost(ctx, feedpost)
+		if err != nil {
+			return err
+		}
+
+		log.Println("copied post", feedpost.PostId, "to feed of", user)
+
+		cursor_ok = cursor.Next(ctx)
+	}
+
+	return nil
+}
+
+func (s *storage_struct) addFeedPost(ctx context.Context, feedpost storage.FeedPost) error {
+	for attempt := 0; attempt < 5; attempt++ {
+		_, err := s.feeds.InsertOne(ctx, feedpost)
+		if err != nil {
+			if mongo.IsDuplicateKeyError(err) {
+				continue
+			}
+			return fmt.Errorf("something went wrong - %w", storage.ErrStorage)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("too much attempts during inserting - %w", storage.ErrCollision)
 }

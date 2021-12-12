@@ -1,0 +1,130 @@
+package main
+
+import (
+	"log"
+	"microblog/handlers"
+	"microblog/storage"
+	"microblog/storage/mongostore"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/gorilla/mux"
+
+	"github.com/urfave/cli"
+
+	"github.com/RichardKnop/machinery/v1"
+	"github.com/RichardKnop/machinery/v1/config"
+	machinery_log "github.com/RichardKnop/machinery/v1/log"
+)
+
+func mongoStorage() storage.Storage {
+	mongoUrl := os.Getenv("MONGO_URL")
+	mongostorage := mongostore.NewStorage(mongoUrl)
+	return mongostorage
+}
+
+func startWebServer() {
+	r := mux.NewRouter()
+
+	handler := &handlers.HTTPHandler{
+		Storage: mongoStorage(),
+		// Queue: 
+	}
+
+	r.HandleFunc("/", handlers.HandleRoot)
+	r.HandleFunc("/api/v1/posts", handler.HandlePostAPost).Methods("POST")
+	r.HandleFunc("/api/v1/posts/{postId:[A-Za-z0-9_\\-]+}", handler.HandleGetThePost).Methods("GET")
+	r.HandleFunc("/api/v1/posts/{postId:[A-Za-z0-9_\\-]+}", handler.HandleChangeThePostText).Methods("PATCH")
+	r.HandleFunc("/api/v1/users/{userId:[0-9a-f]+}/posts", handler.HandleGetThePostLine).Methods("GET")
+	r.HandleFunc("/maintenance/ping", handler.PingHandler).Methods("GET")
+
+	r.HandleFunc("/api/v1/users/{userId:[0-9a-f]+}/subscribe", handler.HandleSubscribe).Methods("POST")
+	r.HandleFunc("/api/v1/subscriptions", handler.HandleGetSubscriptions).Methods("GET")
+	r.HandleFunc("/api/v1/subscribers", handler.HandleGetSubscribers).Methods("GET")
+	r.HandleFunc("/api/v1/feed", handler.GetFeed).Methods("GET")   // behave like posts
+
+	srv:= http.Server{
+		Handler:      r,
+		Addr:         "0.0.0.0:8080",
+		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  15 * time.Second,
+	}
+
+	log.Printf("Start serving on %s", srv.Addr)
+	log.Fatal(srv.ListenAndServe())
+}
+
+var (
+	app *cli.App
+)
+
+func init() {
+	// Initialise a CLI app
+	app = cli.NewApp()
+	app.Name = "MicroBlogQueue"
+	app.Usage = "queue for async work with feeds"
+	app.Version = "0.0.0"
+}
+
+func main() {
+	app_mode := os.Getenv("APP_MODE")
+
+	switch app_mode {
+	case "SERVER":
+		startWebServer()
+	case "WORKER":
+		runWorker()
+	}
+}
+
+func startQueue() (*machinery.Server, error) {
+	url := os.Getenv("REDIS_URL")
+	cnf := &config.Config{
+		DefaultQueue:    "machinery_tasks",
+		ResultsExpireIn: 3600,
+		Broker:          url,
+		ResultBackend:   url,
+		Redis: &config.RedisConfig{
+			MaxIdle:                3,
+			IdleTimeout:            240,
+			ReadTimeout:            15,
+			WriteTimeout:           15,
+			ConnectTimeout:         15,
+			NormalTasksPollPeriod:  1000,
+			DelayedTasksPollPeriod: 500,
+		},
+	}
+
+	server, err := machinery.NewServer(cnf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Register tasks
+	tasks := map[string]interface{}{
+		// "encode": encodeTaskFunc,
+		// "decode": decodeTaskFunc,
+	}
+
+	return server, server.RegisterTasks(tasks)
+}
+
+func runWorker() error {
+	consumerTag := "machinery_worker"
+
+	server, err := startQueue()
+	if err != nil {
+		return err
+	}
+
+	worker := server.NewWorker(consumerTag, 0)
+
+	errorhandler := func(err error) {
+		machinery_log.ERROR.Println("Something went wrong:", err)
+	}
+
+	worker.SetErrorHandler(errorhandler)
+
+	return worker.Launch()
+}

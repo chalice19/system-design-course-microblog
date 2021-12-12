@@ -67,7 +67,9 @@ func (h *HTTPHandler) HandlePostAPost(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	loc, _ := time.LoadLocation("UTC")
-	time_now := time.Now().In(loc).Format("2006-01-02T15:04:05Z")
+	time_now := time.Now()
+	iso_timestamp := time_now.In(loc).Format("2006-01-02T15:04:05Z")
+	timestamp := time_now.UnixNano()
 
 	id := uuid.NewString()
 
@@ -75,8 +77,9 @@ func (h *HTTPHandler) HandlePostAPost(rw http.ResponseWriter, r *http.Request) {
 		Id:             id,
 		Text:           data.Text,
 		AuthorId:       user,
-		CreatedAt:      time_now,
-		LastModifiedAt: time_now,
+		CreatedAt:      iso_timestamp,
+		LastModifiedAt: iso_timestamp,
+		Timestamp: 		timestamp,
 	}
 
 	err = h.Storage.PostPost(r.Context(), post)
@@ -121,8 +124,6 @@ func (h *HTTPHandler) HandleGetThePost(rw http.ResponseWriter, r *http.Request) 
 }
 
 func (h *HTTPHandler) HandleGetThePostLine(rw http.ResponseWriter, r *http.Request) {
-	rw.Header().Set("Content-Type", "application/json")
-
 	params := mux.Vars(r)
 	user := params["userId"]
 
@@ -161,6 +162,7 @@ func (h *HTTPHandler) HandleGetThePostLine(rw http.ResponseWriter, r *http.Reque
 
 	rawResponse, _ := json.Marshal(answer)
 
+	rw.Header().Set("Content-Type", "application/json")
 	_, err = rw.Write(rawResponse)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
@@ -234,7 +236,7 @@ func (h *HTTPHandler) HandleSubscribe(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(200)
 
-	// TODO: ничего не отвечаем?
+	// ничего не отвечаем?
 	// rawResponse, _ := json.Marshal(post)
 
 	// rw.Header().Set("Content-Type", "application/json")
@@ -295,4 +297,52 @@ func (h *HTTPHandler) HandleGetSubscribers(rw http.ResponseWriter, r *http.Reque
 	}
 }
 
-func (h *HTTPHandler) GetFeed(rw http.ResponseWriter, r *http.Request) {}
+func (h *HTTPHandler) GetFeed(rw http.ResponseWriter, r *http.Request) {
+	user_slice, ok := r.Header["System-Design-User-Id"]
+	if !ok || len(user_slice) != 1 {
+		// http.Error(rw, "No user specified", http.StatusUnauthorized)
+		http.Error(rw, "No user specified", http.StatusBadRequest)
+		return
+	}
+	user := user_slice[0]
+
+	var err error
+
+	query_params := r.URL.Query()
+	size_query := query_params.Get("size")
+	var size int
+	if size_query == "" {
+		size = 10
+	} else {
+		size, err = strconv.Atoi(size_query)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		} else if size < 0 {
+			http.Error(rw, "Wrong size query", http.StatusBadRequest)
+			return
+		}
+	}
+
+	page_token := query_params.Get("page")
+	match, _ := regexp.MatchString("^[A-Za-z0-9_\\-]*$", page_token)
+	if !match {
+		http.Error(rw, "Wrong PageToken format", http.StatusBadRequest)
+		return
+	}
+
+	posts, err := h.Storage.GetFeed(r.Context(), user, page_token, size)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	rawResponse, _ := json.Marshal(posts)
+
+	rw.Header().Set("Content-Type", "application/json")
+	_, err = rw.Write(rawResponse)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
